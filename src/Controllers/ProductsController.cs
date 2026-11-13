@@ -1,7 +1,6 @@
-using Ecommerce.Data;
-using Ecommerce.Models;
+using Ecommerce.DTOs.Products;
+using Ecommerce.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace Ecommerce.Controllers;
 
@@ -9,29 +8,29 @@ namespace Ecommerce.Controllers;
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IProductService _productService;
 
-    public ProductsController(ApplicationDbContext context)
+    public ProductsController(IProductService productService)
     {
-        _context = context;
+        _productService = productService;
     }
 
-    // GET: api/products
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] ProductQueryDto query
+    )
     {
-        var products = await _context.Products.ToListAsync();
+        var products = await _productService.GetAllAsync(query);
 
         return Ok(products);
     }
 
-    // GET: api/products/1
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Product>> GetProduct(int id)
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
     {
-        var product = await _context.Products.FindAsync(id);
+        var product = await _productService.GetByIdAsync(id);
 
-        if (product == null)
+        if (product is null)
         {
             return NotFound();
         }
@@ -39,51 +38,62 @@ public class ProductsController : ControllerBase
         return Ok(product);
     }
 
-    // POST: api/products
     [HttpPost]
-    public async Task<ActionResult<Product>> CreateProduct(Product product)
+    public async Task<IActionResult> Create(CreateProductDto dto)
     {
-        _context.Products.Add(product);
-
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(
-            nameof(GetProduct),
-            new { id = product.Id },
-            product
-        );
-    }
-
-    // PUT: api/products/1
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateProduct(int id, Product product)
-    {
-        if (id != product.Id)
+        try
         {
-            return BadRequest();
+            var product = await _productService.CreateAsync(dto);
+
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = product.Id },
+                product
+            );
         }
-
-        _context.Entry(product).State = EntityState.Modified;
-
-        await _context.SaveChangesAsync();
-
-        return NoContent();
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
     }
 
-    // DELETE: api/products/1
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteProduct(int id)
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(
+        int id,
+        UpdateProductDto dto)
     {
-        var product = await _context.Products.FindAsync(id);
+        try
+        {
+            var updated = await _productService.UpdateAsync(id, dto);
 
-        if (product == null)
+            if (!updated)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                message = exception.Message
+            });
+        }
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var deleted = await _productService.DeleteAsync(id);
+
+        if (!deleted)
         {
             return NotFound();
         }
-
-        _context.Products.Remove(product);
-
-        await _context.SaveChangesAsync();
 
         return NoContent();
     }
